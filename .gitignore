@@ -1,0 +1,30 @@
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Browser profiles contain login sessions and cookies
+_browser_profile*/
+
+# Local research data, backups and logs
+/data/
+/data_backup_*/
+/logs/
+*.log
+
+# Local credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TikTok 数据采集工具</title>
+<style>
+:root {
+  --bg: #f1f5f9; --card: #fff; --border: #e2e8f0;
+  --text: #1e293b; --muted: #64748b; --primary: #2563eb;
+  --primary-hover: #1d4ed8; --success: #16a34a; --error: #dc2626;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.container { max-width: 780px; margin: 0 auto; padding: 24px 16px 60px; }
+h1 { font-size: 22px; font-weight: 700; margin-bottom: 20px; }
+h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+h2 .step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 12px; flex-shrink: 0; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+.card.disabled { opacity: .5; pointer-events: none; }
+
+/* 按钮 */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: .15s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-danger { background: var(--error); color: #fff; }
+.btn-danger:hover { background: #b91c1c; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { background: #f8fafc; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.actions { display: flex; gap: 10px; margin-top: 12px; }
+
+/* 状态指示 */
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px; border-radius: 20px; background: #f1f5f9; }
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot-green { background: var(--success); }
+.dot-red { background: var(--error); }
+.dot-yellow { background: #eab308; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* 输入 */
+textarea { width: 100%; min-height: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; line-height: 1.8; }
+textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* 日志 */
+.log-box { background: #0f172a; color: #e2e8f0; border-radius: 6px; padding: 12px; font-family: "Cascadia Code", "Consolas", monospace; font-size: 12.5px; line-height: 1.7; max-height: 360px; overflow-y: auto; margin-top: 10px; }
+.log-box .time { color: #64748b; }
+.log-box .info { color: #38bdf8; }
+.log-box .ok { color: #4ade80; }
+.log-box .err { color: #f87171; }
+.log-box .num { color: #fbbf24; }
+
+/* 统计卡片 */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; }
+.stat-item { padding: 12px; border: 1px solid var(--border); border-radius: 8px; text-align: center; }
+.stat-item .label { font-size: 12px; color: var(--muted); }
+.stat-item .value { font-size: 20px; font-weight: 700; color: var(--primary); }
+
+/* 文件列表 */
+.file-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.file-row:last-child { border-bottom: none; }
+.file-name { font-weight: 500; font-size: 14px; }
+.file-meta { font-size: 12px; color: var(--muted); }
+.file-row .btn { padding: 4px 12px; font-size: 12px; }
+.empty { text-align: center; color: var(--muted); padding: 20px; font-size: 14px; }
+
+/* 连接状态 */
+.conn-bar { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 12px; padding: 4px; color: #fff; z-index: 100; transition: .3s; }
+.conn-bar.ok { background: var(--success); }
+.conn-bar.err { background: var(--error); }
+.conn-bar.hidden { transform: translateY(100%); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>TikTok 视频数据采集工具</h1>
+
+  <!-- 1. 登录 -->
+  <div class="card" id="sec-login">
+    <h2><span class="step">1</span> 浏览器登录</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <span class="status" id="login-status"><span class="dot dot-red"></span> 未登录</span>
+      <div class="actions" style="margin:0">
+        <button class="btn btn-primary" id="btn-login" onclick="doLogin()">打开登录浏览器</button>
+        <button class="btn btn-outline" id="btn-login-done" onclick="doLoginDone()" style="display:none">登录完成</button>
+      </div>
+    </div>
+    <p class="hint">首次使用需登录 TikTok。点击按钮后会弹出浏览器窗口，手动登录后点"登录完成"。登录状态会持久保存。</p>
+  </div>
+
+  <!-- 2. 采集设置 -->
+  <div class="card" id="sec-scrape">
+    <h2><span class="step">2</span> 采集设置</h2>
+    <textarea id="accounts" placeholder="每行输入一个 TikTok 账号，支持以下格式：&#10;https://www.tiktok.com/@cgtneurope&#10;https://www.tiktok.com/t/ZPxxxxxxxx/&#10;https://vm.tiktok.com/ZMxxxxxxxx/&#10;@cgtnofficial&#10;chinadailyofficial"></textarea>
+    <p class="hint">自动从主页 URL 或分享短链中提取用户名。支持断点续传，中断后重新采集会跳过已有数据。</p>
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-start" onclick="doStart()">开始采集</button>
+      <button class="btn btn-danger" id="btn-stop" onclick="doStop()" disabled>停止</button>
+    </div>
+  </div>
+
+  <!-- 3. 进度 -->
+  <div class="card" id="sec-progress">
+    <h2><span class="step">3</span> 采集进度</h2>
+    <div class="stat-grid" id="stat-grid"></div>
+    <div class="log-box" id="log"></div>
+  </div>
+
+  <!-- 4. 数据文件 -->
+  <div class="card" id="sec-files">
+    <h2><span class="step">4</span> 数据文件</h2>
+    <div id="files-list"><div class="empty">暂无数据文件</div></div>
+  </div>
+
+  <!-- 5. 评论采集 -->
+  <div class="card" id="sec-comments">
+    <h2><span class="step">5</span> 评论采集（含楼中楼回复）</h2>
+    <div id="comment-sources-list"><div class="empty">暂无可用账号（需先完成该账号的视频采集）</div></div>
+    <p class="hint">对勾选账号已采集到的全部视频，逐条打开视频页采集评论和楼中楼回复，不设数量上限，耗时较长（视评论量而定，热门视频可能需要数分钟）。支持断点续传，中断后重新开始会跳过已完成的视频。</p>
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-comments-start" onclick="doCommentsStart()">开始采集评论</button>
+      <button class="btn btn-danger" id="btn-comments-stop" onclick="doStop()" disabled>停止</button>
+    </div>
+    <div class="stat-grid" id="comment-stat-grid"></div>
+  </div>
+</div>
+
+<div class="conn-bar hidden" id="conn-bar"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const log = $('#log');
+const statGrid = $('#stat-grid');
+let ws = null;
+let accountStats = {};
+let commentStats = {};
+let reconnectTimer = null;
+
+// ── WebSocket ──
+
+function connectWS() {
+  if (ws && ws.readyState <= 1) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onopen = () => showConn('ok', '已连接');
+  ws.onclose = () => { showConn('err', '连接断开，重连中...'); reconnectTimer = setTimeout(connectWS, 2000); };
+  ws.onerror = () => {};
+  ws.onmessage = (e) => {
+    try { handleMsg(JSON.parse(e.data)); } catch {}
+  };
+}
+
+function showConn(cls, text) {
+  const bar = $('#conn-bar');
+  bar.className = 'conn-bar ' + cls;
+  bar.textContent = text;
+  if (cls === 'ok') setTimeout(() => bar.classList.add('hidden'), 1500);
+}
+
+function handleMsg(msg) {
+  const t = msg.type;
+  if (t === 'login_opened') {
+    setLoginStatus('yellow', '浏览器已打开，请登录...');
+    $('#btn-login').style.display = 'none';
+    $('#btn-login-done').style.display = '';
+  } else if (t === 'login_closed' || t === 'login_done') {
+    setLoginStatus('green', `已登录 (${msg.cookie_count || 0} cookies)`);
+    $('#btn-login').textContent = '重新登录';
+    $('#btn-login').style.display = '';
+    $('#btn-login-done').style.display = 'none';
+  } else if (t === 'scrape_started') {
+    setScraping(true);
+    accountStats = {};
+    (msg.accounts || []).forEach(a => { accountStats[a] = { count: 0, status: '等待中' }; });
+    renderStats();
+    appendLog('开始采集: ' + (msg.accounts || []).join(', '), 'info');
+  } else if (t === 'account_start') {
+    if (accountStats[msg.account]) accountStats[msg.account].status = '采集中...';
+    renderStats();
+    appendLog(`[${msg.account}] 开始 (${msg.index+1}/${msg.total})`, 'info');
+  } else if (t === 'progress') {
+    if (accountStats[msg.account]) {
+      accountStats[msg.account].count = msg.total;
+      accountStats[msg.account].status = `${msg.direction} #${msg.round}`;
+    }
+    renderStats();
+    appendLog(`[${msg.account}] +${msg.new} → <span class="num">${msg.total}</span>`, 'ok');
+  } else if (t === 'account_done') {
+    if (accountStats[msg.account]) {
+      accountStats[msg.account].count = msg.count;
+      accountStats[msg.account].status = '完成';
+    }
+    renderStats();
+    appendLog(`[${msg.account}] 采集完成: ${msg.count} 条`, 'ok');
+    refreshFiles();
+  } else if (t === 'account_error') {
+    if (accountStats[msg.account]) accountStats[msg.account].status = '出错';
+    renderStats();
+    appendLog(`[${msg.account}] 错误: ${msg.error}`, 'err');
+  } else if (t === 'scrape_done') {
+    setScraping(false);
+    appendLog('全部完成', 'ok');
+    refreshFiles();
+  } else if (t === 'comments_scrape_started') {
+    setScraping(true);
+    commentStats = {};
+    (msg.accounts || []).forEach(a => { commentStats[a] = { comments: 0, status: '等待中' }; });
+    renderCommentStats();
+    appendLog('开始采集评论: ' + (msg.accounts || []).join(', '), 'info');
+  } else if (t === 'comments_account_start') {
+    if (commentStats[msg.account]) commentStats[msg.account].status = '采集中...';
+    renderCommentStats();
+    appendLog(`[评论][${msg.account}] 开始 (${msg.index+1}/${msg.total})`, 'info');
+  } else if (t === 'comments_progress') {
+    if (commentStats[msg.account]) {
+      commentStats[msg.account].comments = msg.running_total;
+      commentStats[msg.account].status = `视频 ${msg.index+1}/${msg.total}`;
+    }
+    renderCommentStats();
+    if (msg.new > 0) {
+      appendLog(`[评论][${msg.account}] 视频${msg.video_id} +${msg.new} → <span class="num">${msg.running_total}</span>`, 'ok');
+    }
+  } else if (t === 'comments_account_done') {
+    if (commentStats[msg.account]) commentStats[msg.account].status = '完成';
+    renderCommentStats();
+    appendLog(`[评论][${msg.account}] 采集完成: ${msg.count} 条`, 'ok');
+    refreshFiles();
+    refreshCommentSources();
+  } else if (t === 'comments_account_error') {
+    if (commentStats[msg.account]) commentStats[msg.account].status = '出错';
+    renderCommentStats();
+    appendLog(`[评论][${msg.account}] 错误: ${msg.error}`, 'err');
+  } else if (t === 'comments_scrape_done') {
+    setScraping(false);
+    appendLog('评论采集全部完成', 'ok');
+    refreshFiles();
+    refreshCommentSources();
+  } else if (t === 'log') {
+    appendLog(msg.msg);
+  } else if (t === 'error') {
+    appendLog(msg.msg, 'err');
+  }
+}
+
+// ── UI 更新 ──
+
+function setLoginStatus(color, text) {
+  $('#login-status').innerHTML = `<span class="dot dot-${color}"></span> ${text}`;
+}
+
+function setScraping(active) {
+  $('#btn-start').disabled = active;
+  $('#btn-stop').disabled = !active;
+  $('#btn-comments-start').disabled = active;
+  $('#btn-comments-stop').disabled = !active;
+}
+
+function appendLog(text, cls) {
+  const now = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  const line = document.createElement('div');
+  line.innerHTML = `<span class="time">${now}</span> ` + (cls ? `<span class="${cls}">${text}</span>` : text);
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderStats() {
+  let html = '';
+  for (const [name, s] of Object.entries(accountStats)) {
+    html += `<div class="stat-item"><div class="value">${s.count}</div><div class="label">${name}</div><div class="label">${s.status}</div></div>`;
+  }
+  statGrid.innerHTML = html;
+}
+
+function renderCommentStats() {
+  let html = '';
+  for (const [name, s] of Object.entries(commentStats)) {
+    html += `<div class="stat-item"><div class="value">${s.comments}</div><div class="label">${name}</div><div class="label">${s.status}</div></div>`;
+  }
+  $('#comment-stat-grid').innerHTML = html;
+}
+
+// ── API 调用 ──
+
+async function doLogin() {
+  $('#btn-login').disabled = true;
+  try {
+    await fetch('/api/login', { method: 'POST' });
+    setLoginStatus('yellow', '正在启动浏览器...');
+  } catch (e) {
+    appendLog('请求失败: ' + e.message, 'err');
+  }
+  $('#btn-login').disabled = false;
+}
+
+async function doLoginDone() {
+  $('#btn-login-done').disabled = true;
+  try {
+    await fetch('/api/login/done', { method: 'POST' });
+    setLoginStatus('yellow', '正在保存登录状态...');
+  } catch (e) {
+    appendLog('请求失败: ' + e.message, 'err');
+  }
+  $('#btn-login-done').disabled = false;
+}
+
+async function doStart() {
+  const raw = $('#accounts').value.trim();
+  if (!raw) { alert('请输入至少一个账号'); return; }
+  const accounts = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  try {
+    const res = await fetch('/api/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accounts }),
+    });
+    const data = await res.json();
+    if (!res.ok) { appendLog(data.error || '启动失败', 'err'); return; }
+    appendLog('已提交采集任务: ' + data.accounts.join(', '), 'info');
+  } catch (e) {
+    appendLog('请求失败: ' + e.message, 'err');
+  }
+}
+
+async function doStop() {
+  await fetch('/api/scrape/stop', { method: 'POST' });
+  appendLog('已发送停止信号，等待当前轮次结束...', 'info');
+}
+
+async function doCommentsStart() {
+  const accounts = Array.from(document.querySelectorAll('.comment-src-cb:checked')).map(el => el.value);
+  if (!accounts.length) { alert('请至少选择一个账号'); return; }
+  try {
+    const res = await fetch('/api/comments/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accounts }),
+    });
+    const data = await res.json();
+    if (!res.ok) { appendLog(data.error || '启动失败', 'err'); return; }
+    appendLog('已提交评论采集任务: ' + data.accounts.join(', '), 'info');
+  } catch (e) {
+    appendLog('请求失败: ' + e.message, 'err');
+  }
+}
+
+async function refreshCommentSources() {
+  try {
+    const res = await fetch('/api/comment-sources');
+    const sources = await res.json();
+    const el = $('#comment-sources-list');
+    if (!sources.length) { el.innerHTML = '<div class="empty">暂无可用账号（需先完成该账号的视频采集）</div>'; return; }
+    const checked = new Set(Array.from(document.querySelectorAll('.comment-src-cb:checked')).map(el => el.value));
+    el.innerHTML = sources.map(s => `
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px">
+        <input type="checkbox" class="comment-src-cb" value="${s.account}" ${checked.has(s.account) ? 'checked' : ''}>
+        ${s.account} <span class="file-meta">(${s.video_count} 条视频 · 已采集评论 ${s.comment_count} 条)</span>
+      </label>
+    `).join('');
+  } catch {}
+}
+
+async function refreshFiles() {
+  try {
+    const res = await fetch('/api/files');
+    const files = await res.json();
+    const el = $('#files-list');
+    if (!files.length) { el.innerHTML = '<div class="empty">暂无数据文件</div>'; return; }
+    el.innerHTML = files.map(f => `
+      <div class="file-row">
+        <div>
+          <div class="file-name">${f.name}</div>
+          <div class="file-meta">${f.rows} 条  ·  ${(f.size/1024).toFixed(0)} KB</div>
+        </div>
+        <a class="btn btn-outline" href="/api/download/${f.name}" download>下载</a>
+      </div>
+    `).join('');
+  } catch {}
+}
+
+// ── 初始化 ──
+
+async function init() {
+  connectWS();
+  try {
+    const res = await fetch('/api/status');
+    const s = await res.json();
+    if (s.logged_in) setLoginStatus('green', '已登录 (profile已保存)');
+    if (s.scraping) setScraping(true);
+  } catch {}
+  refreshFiles();
+  refreshCommentSources();
+}
+
+init();
+setInterval(() => { refreshFiles(); refreshCommentSources(); }, 15000);
+</script>
+</body>
+</html>
